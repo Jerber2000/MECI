@@ -23,6 +23,11 @@ class IconButton(Button):
         self.add_widget(self.text_label)
 
 class MainApp(App):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Cargar el modelo YOLO una sola vez
+        self.model = YOLO('last.pt')  # Asegúrate de que este archivo esté en el directorio actual
+
     def build(self):
         # Determinar si el dispositivo es móvil o de escritorio
         is_mobile = Window.width < 600
@@ -61,7 +66,8 @@ class MainApp(App):
         self.button_container.add_widget(photo_button)
 
         # Botón para cerrar la cámara
-        close_camera_button = Button(text='Cerrar Cámara', size_hint=(1, None), height=50, background_color=(1, 0, 0, 1), color=(1, 1, 1, 1))
+        close_camera_button = Button(text='Cerrar Cámara', size_hint=(1, None), height=50,
+                                     background_color=(1, 0, 0, 1), color=(1, 1, 1, 1))
         close_camera_button.bind(on_press=self.close_camera)
         self.button_container.add_widget(close_camera_button)
 
@@ -89,7 +95,7 @@ class MainApp(App):
     def run_detector(self, instance):
         """Iniciar la detección en tiempo real."""
         # Si la cámara ya está en funcionamiento, no hacemos nada
-        if hasattr(self, 'cap') and self.cap.isOpened():
+        if hasattr(self, 'cap') and self.cap is not None and self.cap.isOpened():
             return
 
         # Cambiar a detección en tiempo real y ejecutar en un hilo separado
@@ -98,10 +104,8 @@ class MainApp(App):
         detector_thread.start()
 
     def start_detector(self):
-        """Iniciar la cámara y el modelo de detección."""
+        """Iniciar la cámara."""
         self.cap = cv2.VideoCapture(0)
-        self.model = YOLO('last.pt')  # Asegúrate de que este archivo esté en el directorio actual
-
         if not self.cap.isOpened():
             print("Error: No se puede abrir la cámara.")
             return
@@ -111,6 +115,10 @@ class MainApp(App):
 
     def update_frame(self, dt):
         """Actualizar el frame con detección en tiempo real."""
+        # Verificar si la cámara está disponible
+        if not hasattr(self, 'cap') or self.cap is None:
+            return
+
         ret, frame = self.cap.read()
         if not ret:
             return
@@ -132,29 +140,30 @@ class MainApp(App):
                 cv2.putText(frame, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
         # Convertir el frame a una textura y mostrarla en la imagen de Kivy
-        buf = cv2.flip(frame, 0).tostring()
+        buf = cv2.flip(frame, 0).tobytes()
         texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
         texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
         self.background.texture = texture
 
     def close_camera(self, instance):
-        """Cerrar la cámara cuando el botón sea presionado."""
-        if hasattr(self, 'cap'):
-            self.cap.release()
+        """Cerrar la cámara y restaurar el estado inicial de la app."""
+        if hasattr(self, 'cap') and self.cap is not None:
+            self.cap.release()  # Liberar la cámara
             self.cap = None
-            cv2.destroyAllWindows()
 
-        # Restaurar la imagen de fondo original
+        # Anular el registro de update_frame del reloj de Kivy
+        Clock.unschedule(self.update_frame)
+
+        # Restaurar la imagen de fondo original en la interfaz de Kivy
+        self.background.texture = None  # Limpiar la textura de detección
         self.background.source = 'images/background.jpg'
-        self.background.texture = None
+        self.background.reload()  # Recargar la imagen de fondo
 
     def on_stop(self):
         # Liberar la cámara al cerrar la app
-        if hasattr(self, 'cap'):
+        if hasattr(self, 'cap') and self.cap is not None:
             self.cap.release()
-            cv2.destroyAllWindows()
 
-
-# Corregido para que se ejecute correctamente cuando el archivo se ejecute directamente
+# Ejecutar la aplicación
 if __name__ == '__main__':
     MainApp().run()
