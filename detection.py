@@ -14,15 +14,29 @@ import cv2
 from ultralytics import YOLO
 import threading
 
-class IconButton(Button):
-    def __init__(self, icon_source, **kwargs):
+class IconButton(BoxLayout):
+    def __init__(self, icon_source, text='', **kwargs):
         super().__init__(**kwargs)
-        self.background_normal = icon_source
-        self.background_down = icon_source
-        self.background_color = (1, 1, 1, 1)  # Color de fondo blanco
-        self.border = (0, 0, 0, 0)  # Sin bordes
-        self.text = ''
+        self.orientation = 'vertical'
         self.size_hint = (1, 1)
+        self.spacing = 5
+        self.padding = 5
+
+        # Imagen del ícono
+        self.icon = Image(source=icon_source, size_hint=(1, 0.8), allow_stretch=True)
+        # Etiqueta de texto centrada
+        self.label = Label(text=text, size_hint=(1, 0.2), color=(0, 0, 0, 1), font_size='14sp', halign='center')
+        self.label.bind(size=self.label.setter('text_size'))
+
+        self.add_widget(self.icon)
+        self.add_widget(self.label)
+
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):
+            if hasattr(self, 'on_press'):
+                self.on_press()
+            return True
+        return super().on_touch_down(touch)
 
 class MainApp(App):
     # Contadores para cada clase
@@ -41,36 +55,36 @@ class MainApp(App):
         # Sidebar izquierdo
         self.left_layout = BoxLayout(orientation='vertical', size_hint=(0.2, 1))
 
-        # Fondo del sidebar izquierdo
+        # Fondo del sidebar izquierdo (blanco)
         with self.left_layout.canvas.before:
-            Color(0.6, 0.8, 0.6, 1)
+            Color(1, 1, 1, 1)
             self.bg_rect_left = Rectangle(size=self.left_layout.size, pos=self.left_layout.pos)
 
         self.left_layout.bind(size=self.update_rect_left, pos=self.update_rect_left)
 
-        # Botón de ocultar/mostrar el sidebar
-        self.toggle_button = Button(text='<<', size_hint=(1, None), height=50,
-                                    background_color=(0, 1, 0, 1), color=(1, 1, 1, 1))
-        self.toggle_button.bind(on_press=self.toggle_sidebar)
-        self.left_layout.add_widget(self.toggle_button)
+        # Botón de ocultar/mostrar el sidebar izquierdo
+        self.left_toggle_button = Button(text='<<', size_hint=(1, None), height=50,
+                                         background_color=(0, 1, 0, 1), color=(1, 1, 1, 1))
+        self.left_toggle_button.bind(on_press=self.toggle_left_sidebar)
+        self.left_layout.add_widget(self.left_toggle_button)
 
         # Botones que ocupan todo el espacio disponible
         button_layout = GridLayout(cols=1, spacing=10, padding=10)
         button_layout.size_hint = (1, 1)
 
-        # Botón de cámara en tiempo real con ícono
-        real_time_button = IconButton(icon_source='images/camara.png')
-        real_time_button.bind(on_press=self.run_detector)
+        # Botón de cámara en tiempo real con ícono y texto
+        real_time_button = IconButton(icon_source='images/camara.png', text='Cámara')
+        real_time_button.on_press = self.run_detector
         button_layout.add_widget(real_time_button)
 
-        # Botón de carga de imagen con ícono
-        photo_button = IconButton(icon_source='images/img.png')
-        photo_button.bind(on_press=self.detect_image)
+        # Botón de carga de imagen con ícono y texto
+        photo_button = IconButton(icon_source='images/img.png', text='Cargar Imagen')
+        photo_button.on_press = self.detect_image
         button_layout.add_widget(photo_button)
 
-        # Botón para cerrar la cámara con ícono (puedes usar un ícono apropiado)
-        close_camera_button = IconButton(icon_source='images/close.png')
-        close_camera_button.bind(on_press=self.close_camera)
+        # Botón para cerrar la cámara con ícono y texto
+        close_camera_button = IconButton(icon_source='images/close.png', text='Cerrar Cámara')
+        close_camera_button.on_press = self.close_camera
         button_layout.add_widget(close_camera_button)
 
         # Añadir los botones al sidebar izquierdo
@@ -87,25 +101,48 @@ class MainApp(App):
         # Añadir el layout central al layout principal
         self.main_layout.add_widget(self.center_layout)
 
-        # Sidebar derecho para mostrar los contadores
+        # Sidebar derecho para mostrar los contenedores de imágenes
         self.right_layout = BoxLayout(orientation='vertical', size_hint=(0.2, 1), padding=10, spacing=10)
 
-        # Fondo del sidebar derecho
+        # Fondo del sidebar derecho (blanco)
         with self.right_layout.canvas.before:
-            Color(0.8, 0.8, 0.8, 1)
+            Color(1, 1, 1, 1)
             self.bg_rect_right = Rectangle(size=self.right_layout.size, pos=self.right_layout.pos)
 
         self.right_layout.bind(size=self.update_rect_right, pos=self.update_rect_right)
 
-        # Etiquetas para mostrar los contadores
-        self.reciclable_label = Label(text='Reciclable: 0', color=(0, 0, 1, 1), font_size='20sp')
-        self.no_reciclable_label = Label(text='No Reciclable: 0', color=(1, 0, 0, 1), font_size='20sp')
-        self.organico_label = Label(text='Orgánico: 0', color=(0, 1, 0, 1), font_size='20sp')
+        # Botón de ocultar/mostrar el sidebar derecho
+        self.right_toggle_button = Button(text='>>', size_hint=(1, None), height=50,
+                                          background_color=(0, 1, 0, 1), color=(1, 1, 1, 1))
+        self.right_toggle_button.bind(on_press=self.toggle_right_sidebar)
+        self.right_layout.add_widget(self.right_toggle_button)
 
-        # Añadir las etiquetas al sidebar derecho
-        self.right_layout.add_widget(self.reciclable_label)
-        self.right_layout.add_widget(self.no_reciclable_label)
-        self.right_layout.add_widget(self.organico_label)
+        # Crear contenedores para cada clase
+        # Reciclable
+        self.reciclable_container = BoxLayout(orientation='vertical', spacing=5)
+        self.reciclable_image = Image(source='images/reciclable.jpeg', allow_stretch=True, keep_ratio=True)
+        self.reciclable_count_label = Label(text='0', color=(0, 0, 0, 1), font_size='20sp')
+        self.reciclable_container.add_widget(self.reciclable_image)
+        self.reciclable_container.add_widget(self.reciclable_count_label)
+
+        # No Reciclable
+        self.no_reciclable_container = BoxLayout(orientation='vertical', spacing=5)
+        self.no_reciclable_image = Image(source='images/no_reciclable.jpeg', allow_stretch=True, keep_ratio=True)
+        self.no_reciclable_count_label = Label(text='0', color=(0, 0, 0, 1), font_size='20sp')
+        self.no_reciclable_container.add_widget(self.no_reciclable_image)
+        self.no_reciclable_container.add_widget(self.no_reciclable_count_label)
+
+        # Orgánico
+        self.organico_container = BoxLayout(orientation='vertical', spacing=5)
+        self.organico_image = Image(source='images/organico.jpeg', allow_stretch=True, keep_ratio=True)
+        self.organico_count_label = Label(text='0', color=(0, 0, 0, 1), font_size='20sp')
+        self.organico_container.add_widget(self.organico_image)
+        self.organico_container.add_widget(self.organico_count_label)
+
+        # Añadir los contenedores al sidebar derecho
+        self.right_layout.add_widget(self.reciclable_container)
+        self.right_layout.add_widget(self.no_reciclable_container)
+        self.right_layout.add_widget(self.organico_container)
 
         # Añadir el sidebar derecho al layout principal
         self.main_layout.add_widget(self.right_layout)
@@ -120,15 +157,23 @@ class MainApp(App):
         self.bg_rect_right.size = self.right_layout.size
         self.bg_rect_right.pos = self.right_layout.pos
 
-    def toggle_sidebar(self, instance):
-        if self.left_layout.width > 0:
+    def toggle_left_sidebar(self, instance):
+        if self.left_layout.size_hint_x > 0:
             self.left_layout.size_hint_x = 0
-            self.toggle_button.text = '>>'
+            self.left_toggle_button.text = '>>'
         else:
             self.left_layout.size_hint_x = 0.2
-            self.toggle_button.text = '<<'
+            self.left_toggle_button.text = '<<'
 
-    def run_detector(self, instance):
+    def toggle_right_sidebar(self, instance):
+        if self.right_layout.size_hint_x > 0:
+            self.right_layout.size_hint_x = 0
+            self.right_toggle_button.text = '<<'
+        else:
+            self.right_layout.size_hint_x = 0.2
+            self.right_toggle_button.text = '>>'
+
+    def run_detector(self):
         if hasattr(self, 'cap') and self.cap is not None and self.cap.isOpened():
             return
 
@@ -190,17 +235,18 @@ class MainApp(App):
                     self.organico_count += 1
 
         # Actualizar las etiquetas de los contadores
-        self.reciclable_label.text = f'Reciclable: {self.reciclable_count}'
-        self.no_reciclable_label.text = f'No Reciclable: {self.no_reciclable_count}'
-        self.organico_label.text = f'Orgánico: {self.organico_count}'
+        self.reciclable_count_label.text = str(self.reciclable_count)
+        self.no_reciclable_count_label.text = str(self.no_reciclable_count)
+        self.organico_count_label.text = str(self.organico_count)
 
         # Mostrar el frame en la interfaz
-        buf = cv2.flip(frame, 0).tobytes()
+        frame = cv2.flip(frame, 0)
+        buf = frame.tobytes()
         texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
         texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
         self.background.texture = texture
 
-    def close_camera(self, instance=None):
+    def close_camera(self):
         if hasattr(self, 'cap') and self.cap is not None:
             self.cap.release()
             self.cap = None
@@ -214,11 +260,11 @@ class MainApp(App):
         self.reciclable_count = 0
         self.no_reciclable_count = 0
         self.organico_count = 0
-        self.reciclable_label.text = 'Reciclable: 0'
-        self.no_reciclable_label.text = 'No Reciclable: 0'
-        self.organico_label.text = 'Orgánico: 0'
+        self.reciclable_count_label.text = '0'
+        self.no_reciclable_count_label.text = '0'
+        self.organico_count_label.text = '0'
 
-    def detect_image(self, instance):
+    def detect_image(self):
         """Abrir un selector de archivos para elegir una imagen y realizar la detección."""
         # Cerrar la cámara si está abierta
         self.close_camera()
@@ -294,13 +340,14 @@ class MainApp(App):
                         self.organico_count += 1
 
             # Actualizar las etiquetas de los contadores
-            self.reciclable_label.text = f'Reciclable: {self.reciclable_count}'
-            self.no_reciclable_label.text = f'No Reciclable: {self.no_reciclable_count}'
-            self.organico_label.text = f'Orgánico: {self.organico_count}'
+            self.reciclable_count_label.text = str(self.reciclable_count)
+            self.no_reciclable_count_label.text = str(self.no_reciclable_count)
+            self.organico_count_label.text = str(self.organico_count)
 
             # Mostrar la imagen en la interfaz
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            buf = cv2.flip(frame, 0).tobytes()
+            frame = cv2.flip(frame, 0)
+            buf = frame.tobytes()
             texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='rgb')
             texture.blit_buffer(buf, colorfmt='rgb', bufferfmt='ubyte')
             self.background.texture = texture
