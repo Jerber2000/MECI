@@ -1,3 +1,5 @@
+import os
+
 from kivy.app import App
 from kivy.uix.button import Button
 from kivy.uix.boxlayout import BoxLayout
@@ -13,6 +15,7 @@ from kivy.graphics.texture import Texture
 import cv2
 from ultralytics import YOLO
 import threading
+from kivy.animation import Animation
 
 class IconButton(BoxLayout):
     def __init__(self, icon_source, text='', **kwargs):
@@ -55,18 +58,24 @@ class MainApp(App):
         # Sidebar izquierdo
         self.left_layout = BoxLayout(orientation='vertical', size_hint=(0.2, 1))
 
+        # Contenedor superior para el botón de toggle del sidebar izquierdo
+        top_button_layout = BoxLayout(orientation='horizontal', size_hint=(1, None), height=50)
+
+        # Botón para el sidebar izquierdo
+        self.left_toggle_button = Button(text='<<', size_hint=(None, 1), width=115,
+                                         background_color=(0, 1, 0, 1), color=(1, 1, 1, 1))
+        self.left_toggle_button.bind(on_press=self.toggle_left_sidebar)
+        top_button_layout.add_widget(self.left_toggle_button)
+
+        # Añadir el contenedor del botón al sidebar izquierdo
+        self.left_layout.add_widget(top_button_layout)
+
         # Fondo del sidebar izquierdo (blanco)
         with self.left_layout.canvas.before:
             Color(1, 1, 1, 1)
             self.bg_rect_left = Rectangle(size=self.left_layout.size, pos=self.left_layout.pos)
 
         self.left_layout.bind(size=self.update_rect_left, pos=self.update_rect_left)
-
-        # Botón de ocultar/mostrar el sidebar izquierdo
-        self.left_toggle_button = Button(text='<<', size_hint=(1, None), height=50,
-                                         background_color=(0, 1, 0, 1), color=(1, 1, 1, 1))
-        self.left_toggle_button.bind(on_press=self.toggle_left_sidebar)
-        self.left_layout.add_widget(self.left_toggle_button)
 
         # Botones que ocupan todo el espacio disponible
         button_layout = GridLayout(cols=1, spacing=10, padding=10)
@@ -102,7 +111,19 @@ class MainApp(App):
         self.main_layout.add_widget(self.center_layout)
 
         # Sidebar derecho para mostrar los contenedores de imágenes
-        self.right_layout = BoxLayout(orientation='vertical', size_hint=(0.2, 1), padding=10, spacing=10)
+        self.right_layout = BoxLayout(orientation='vertical', size_hint=(0.2, 1))
+
+        # Contenedor superior para el botón de toggle del sidebar derecho
+        top_button_layout_right = BoxLayout(orientation='horizontal', size_hint=(1, None), height=50)
+
+        # Botón para el sidebar derecho
+        self.right_toggle_button = Button(text='<<', size_hint=(None, 1), width=115,
+                                         background_color=(0, 1, 0, 1), color=(1, 1, 1, 1))
+        self.right_toggle_button.bind(on_press=self.toggle_right_sidebar)
+        top_button_layout_right.add_widget(self.right_toggle_button)
+
+        # Añadir el contenedor del botón al sidebar derecho
+        self.right_layout.add_widget(top_button_layout_right)
 
         # Fondo del sidebar derecho (blanco)
         with self.right_layout.canvas.before:
@@ -110,12 +131,6 @@ class MainApp(App):
             self.bg_rect_right = Rectangle(size=self.right_layout.size, pos=self.right_layout.pos)
 
         self.right_layout.bind(size=self.update_rect_right, pos=self.update_rect_right)
-
-        # Botón de ocultar/mostrar el sidebar derecho
-        self.right_toggle_button = Button(text='>>', size_hint=(1, None), height=50,
-                                          background_color=(0, 1, 0, 1), color=(1, 1, 1, 1))
-        self.right_toggle_button.bind(on_press=self.toggle_right_sidebar)
-        self.right_layout.add_widget(self.right_toggle_button)
 
         # Crear contenedores para cada clase
         # Reciclable
@@ -147,6 +162,9 @@ class MainApp(App):
         # Añadir el sidebar derecho al layout principal
         self.main_layout.add_widget(self.right_layout)
 
+        self.left_layout.width = self.left_layout.parent.width * 0.2
+        self.right_layout.width = self.right_layout.parent.width * 0.2
+
         return self.main_layout
 
     def update_rect_left(self, *args):
@@ -159,18 +177,28 @@ class MainApp(App):
 
     def toggle_left_sidebar(self, instance):
         if self.left_layout.size_hint_x > 0:
-            self.left_layout.size_hint_x = 0
+            # Animar la transición de ocultar el sidebar
+            anim = Animation(size_hint_x=0, t='out_quad', duration=0.3)
+            anim.start(self.left_layout)
             self.left_toggle_button.text = '>>'
+
         else:
-            self.left_layout.size_hint_x = 0.2
-            self.left_toggle_button.text = '<<'
+            # Animar la transición de mostrar el sidebar
+            anim = Animation(size_hint_x=0.2, t='out_quad', duration=0.3)
+            anim.start(self.left_layout)
+            self.left_toggle_button.text = '>>'
 
     def toggle_right_sidebar(self, instance):
+        # Animar el cambio de tamaño de size_hint_x para el sidebar derecho
         if self.right_layout.size_hint_x > 0:
-            self.right_layout.size_hint_x = 0
+            # Animar la transición de ocultar
+            anim = Animation(size_hint_x=0, t='out_quad', duration=0.3)
+            anim.start(self.right_layout)
             self.right_toggle_button.text = '<<'
         else:
-            self.right_layout.size_hint_x = 0.2
+            # Animar la transición de mostrar
+            anim = Animation(size_hint_x=0.2, t='out_quad', duration=0.3)
+            anim.start(self.right_layout)
             self.right_toggle_button.text = '>>'
 
     def run_detector(self):
@@ -269,9 +297,11 @@ class MainApp(App):
         # Cerrar la cámara si está abierta
         self.close_camera()
 
+        downloads_path = os.path.join(os.path.expanduser('~'), 'Downloads')
+
         # Crear el contenido del popup
         content = BoxLayout(orientation='vertical')
-        filechooser = FileChooserListView(filters=['*.png', '*.jpg', '*.jpeg'], path='.')
+        filechooser = FileChooserListView(filters=['*.png', '*.jpg', '*.jpeg'], path=downloads_path)
         content.add_widget(filechooser)
 
         # Crear los botones de selección y cancelación
